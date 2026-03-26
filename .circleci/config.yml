@@ -1,0 +1,73 @@
+version: 2.1
+
+jobs:
+  build-pbrp:
+    docker:
+      - image: ubuntu:20.04
+    environment:
+      # Device codename
+      DEVICE: "CD6"
+      # PBRP branch to build (check PBRP device branch)
+      PBRP_BRANCH: "pbrp-12.1"
+      # Device tree GitHub repo URL
+      DEVICE_TREE_REPO: "https://github.com/Mikesew1320/TECNO-CD6-PBRP-Tree.git"
+      # Android root directory
+      ANDROID_ROOT: "/home/circleci/android"
+      # Optional: cache directory
+      CCACHE_DIR: "/home/circleci/.ccache"
+    steps:
+      - checkout
+
+      # Install dependencies
+      - run:
+          name: Install build dependencies
+          command: |
+            apt-get update
+            apt-get install -y git wget unzip openjdk-8-jdk python3 bc curl rsync build-essential ccache
+
+      # Prepare build directories
+      - run:
+          name: Setup directories
+          command: |
+            mkdir -p $ANDROID_ROOT
+            cd $ANDROID_ROOT
+
+      # Clone PBRP recovery
+      - run:
+          name: Clone PBRP recovery
+          command: |
+            cd $ANDROID_ROOT
+            git clone -b $PBRP_BRANCH https://github.com/PitchBlackRecoveryProject/android_bootable_recovery.git bootable/recovery
+
+      # Clone device tree
+      - run:
+          name: Clone device tree
+          command: |
+            cd $ANDROID_ROOT
+            git clone $DEVICE_TREE_REPO device/TECNO/$DEVICE
+
+      # Setup environment and lunch
+      - run:
+          name: Initialize build environment
+          command: |
+            cd $ANDROID_ROOT
+            source build/envsetup.sh
+            lunch omni_$DEVICE-eng
+
+      # Build PBRP recovery image
+      - run:
+          name: Build PBRP recovery
+          command: |
+            cd $ANDROID_ROOT
+            mka recoveryimage
+
+      # Store recovery image as artifact
+      - store_artifacts:
+          path: $ANDROID_ROOT/out/target/product/$DEVICE/recovery.img
+          destination: recovery.img
+
+workflows:
+  version: 2
+  build-and-store:
+    jobs:
+      - build-pbrp
